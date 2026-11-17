@@ -1,0 +1,27 @@
+
+# Python virtual environments
+.venv/
+.venv312/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# ChromaDB generated database
+data/chroma_db/
+
+# Generated processed files
+data/processed/*
+!data/processed/.gitkeep
+
+# Environment variables
+.env
+
+# IDE and operating system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Private class notes
+data/raw/*.pdf

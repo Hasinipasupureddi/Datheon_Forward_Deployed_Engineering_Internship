@@ -1,0 +1,5 @@
+
+chromadb
+pypdf
+pytesseract
+pdf2image
