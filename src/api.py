@@ -1,4 +1,4 @@
-
+﻿
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -244,3 +244,12 @@ def query_documents(
 
 from src.monitoring import install_metrics
 install_metrics(app)
+
+# Task 3: Autonomous Field Agent routes
+try:
+    from .field_agent import router as field_agent_router
+except ImportError:
+    from field_agent import router as field_agent_router
+
+app.include_router(field_agent_router, dependencies=[Depends(get_current_user)])
+
