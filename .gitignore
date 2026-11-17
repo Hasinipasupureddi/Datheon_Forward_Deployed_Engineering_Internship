@@ -1,27 +1,54 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Python virtual environments
+# Virtual environments
 .venv/
 .venv312/
 venv/
+env/
 
-# Python cache
-__pycache__/
-*.py[cod]
-
-# ChromaDB generated database
-data/chroma_db/
-
-# Generated processed files
-data/processed/*
-!data/processed/.gitkeep
-
-# Environment variables
+# Environment secrets
 .env
+.env.*
+!.env.example
 
-# IDE and operating system files
+# Databases and vector stores
+*.db
+*.sqlite
+*.sqlite3
+data/users.db
+data/chroma_db/
+data/rag_chroma_db/
+data/processed/
+
+# Private source documents
+data/raw/*.pdf
+data/raw/*.docx
+data/raw/*.xlsx
+data/raw/*.csv
+data/raw/*.txt
+
+# Logs
+*.log
+logs/
+
+# IDE and OS
 .vscode/
+.idea/
 .DS_Store
 Thumbs.db
 
-# Private class notes
-data/raw/*.pdf
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Docker
+.docker/

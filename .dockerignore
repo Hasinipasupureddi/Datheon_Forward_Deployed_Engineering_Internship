@@ -1,0 +1,15 @@
+﻿.venv/
+.venv312/
+venv/
+.git/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.env.*
+!.env.example
+data/
+tests/
+.vscode/
+.DS_Store
+Thumbs.db

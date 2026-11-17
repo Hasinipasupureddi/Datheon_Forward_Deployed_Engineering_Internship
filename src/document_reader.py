@@ -1,17 +1,31 @@
-
-from pypdf import PdfReader
-import pytesseract
-from pdf2image import convert_from_path
+import os
+import shutil
 from pathlib import Path
 
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+import pytesseract
+from pdf2image import convert_from_path
+from pypdf import PdfReader
+
+
+WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+WINDOWS_POPPLER = r"C:\poppler\poppler-26.09.0\Library\bin"
+
+tesseract_path = os.getenv("TESSERACT_CMD") or (
+    WINDOWS_TESSERACT if Path(WINDOWS_TESSERACT).exists()
+    else shutil.which("tesseract")
+)
+
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
+POPPLER_PATH = os.getenv("POPPLER_PATH") or (
+    WINDOWS_POPPLER if Path(WINDOWS_POPPLER).exists()
+    else None
 )
 
 
 def read_pdf(file_path):
     reader = PdfReader(file_path)
-
     text = ""
 
     for page in reader.pages:
@@ -22,14 +36,20 @@ def read_pdf(file_path):
 
     print("Scanned PDF detected. Starting OCR...")
 
+    conversion_options = {}
+    if POPPLER_PATH:
+        conversion_options["poppler_path"] = POPPLER_PATH
+
     images = convert_from_path(
-        file_path,
-        poppler_path=r"C:\poppler\poppler-26.09.0\Library\bin"
+        str(file_path),
+        **conversion_options
     )
+
     for image in images:
         text += pytesseract.image_to_string(image)
 
     return text
+
 
 def save_text(text, output_path):
     output_path = Path(output_path)
@@ -42,14 +62,11 @@ def save_text(text, output_path):
 
 
 if __name__ == "__main__":
-    
     input_path = "data/raw/sample1.pdf"
     content = read_pdf(input_path)
 
     if content.strip():
-
         output_path = "data/processed/sample1.txt"
         save_text(content, output_path)
-
     else:
         print("No text could be extracted.")

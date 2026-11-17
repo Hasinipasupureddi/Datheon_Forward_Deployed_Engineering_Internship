@@ -1,5 +1,5 @@
-
-from vector_store import collection, search_documents
+﻿
+from src.vector_store import collection, search_documents
 
 
 def test_access_filtering():
