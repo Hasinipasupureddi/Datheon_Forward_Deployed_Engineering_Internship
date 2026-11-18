@@ -5,6 +5,11 @@ from pydantic import BaseModel, Field
 import jwt
 
 try:
+    from .dependencies import get_current_user
+except ImportError:
+    from dependencies import get_current_user
+
+try:
     from .auth import (
         get_user_by_username,
         get_user_by_id,
@@ -41,8 +46,6 @@ app = FastAPI(
     version="2.3.0"
 )
 
-security = HTTPBearer()
-
 CLEARANCE_ACCESS = {
     "public": ["public"],
     "internal": ["public", "internal"],
@@ -58,35 +61,6 @@ class LoginRequest(BaseModel):
 class QueryRequest(BaseModel):
     query: str = Field(min_length=2, max_length=1000)
 
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    try:
-        payload = decode_access_token(credentials.credentials)
-        user_id = payload.get("sub")
-
-        if not user_id:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid authentication token"
-            )
-
-        user = get_user_by_id(user_id)
-
-        if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="User not found or inactive"
-            )
-
-        return user
-
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token"
-        )
 
 
 @app.get("/")

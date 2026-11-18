@@ -1,4 +1,4 @@
-services:
+﻿services:
   rag-api:
     build:
       context: .
@@ -8,10 +8,12 @@ services:
 
     ports:
       - "127.0.0.1:8000:8000"
+
     environment:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       OLLAMA_URL: http://host.docker.internal:11434/api/chat
       OLLAMA_MODEL: qwen2.5:3b
+      ERP_API_URL: http://erp-mock:8001
       PYTHONUNBUFFERED: "1"
 
     volumes:
@@ -19,6 +21,10 @@ services:
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+    depends_on:
+      erp-mock:
+        condition: service_healthy
 
     healthcheck:
       test:
@@ -30,5 +36,42 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+
+    restart: unless-stopped
+
+  erp-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: datheon-erp-mock
+
+    command:
+      - uvicorn
+      - src.mock_erp:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+
+    ports:
+      - "127.0.0.1:8001:8001"
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      - ./data:/app/data
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
     restart: unless-stopped

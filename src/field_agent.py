@@ -1,31 +1,30 @@
-﻿import re
+﻿import json
+import sqlite3
 import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+try:
+    from .dependencies import get_current_user
+    from .agent_llm import plan_with_llm, AgentLLMError
+    from .erp_client import erp_client, ERPClientError
+except ImportError:
+    from dependencies import get_current_user
+    from agent_llm import plan_with_llm, AgentLLMError
+    from erp_client import erp_client, ERPClientError
 
 
 router = APIRouter(prefix="/agent", tags=["Autonomous Field Agent"])
 
-# Mock enterprise ERP/CRM records.
-INVENTORY = {
-    "LAPTOP-001": {"sku": "LAPTOP-001", "name": "Business Laptop", "quantity": 24},
-    "MOUSE-002": {"sku": "MOUSE-002", "name": "Wireless Mouse", "quantity": 150},
-    "MONITOR-003": {"sku": "MONITOR-003", "name": "Office Monitor", "quantity": 12},
-}
+DB_PATH = Path("data/agent_state.db")
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-LEADS = {
-    "LEAD-1001": {"lead_id": "LEAD-1001", "name": "Acme Corp", "status": "new"},
-    "LEAD-1002": {"lead_id": "LEAD-1002", "name": "Northwind", "status": "contacted"},
-}
-
-TICKETS: list[dict[str, Any]] = []
-PENDING: dict[str, dict[str, Any]] = {}
-AUDIT_LOG: list[dict[str, Any]] = []
-
-ALLOWED_STATUSES = {"new", "contacted", "qualified", "proposal", "won", "lost"}
+READ_TOOLS = {"inventory_lookup"}
+WRITE_TOOLS = {"update_lead_status", "create_support_ticket"}
 
 
 class AgentRequest(BaseModel):
@@ -36,245 +35,350 @@ class ApprovalRequest(BaseModel):
     approved: bool
 
 
-def record(event: str, details: dict[str, Any]) -> dict[str, Any]:
-    item = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "event": event,
-        "details": details,
-    }
-    AUDIT_LOG.append(item)
-    return item
+def get_connection():
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def inventory_lookup(sku: str) -> dict[str, Any]:
-    sku = sku.upper().strip()
-    if sku not in INVENTORY:
-        raise ValueError(f"Inventory item not found: {sku}")
-    return INVENTORY[sku].copy()
+def init_db():
+    with get_connection() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS agent_approvals (
+                approval_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                arguments TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                handled_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS agent_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                event TEXT NOT NULL,
+                details TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_agent_approvals_owner
+            ON agent_approvals(user_id, tenant_id, status);
+
+            CREATE INDEX IF NOT EXISTS idx_agent_audit_tenant
+            ON agent_audit(tenant_id, id);
+        """)
 
 
-def update_lead_status(lead_id: str, status: str) -> dict[str, Any]:
-    lead_id = lead_id.upper().strip()
-    status = status.lower().strip()
-
-    if lead_id not in LEADS:
-        raise ValueError(f"Lead not found: {lead_id}")
-    if status not in ALLOWED_STATUSES:
-        raise ValueError(f"Invalid status. Allowed: {sorted(ALLOWED_STATUSES)}")
-
-    previous = LEADS[lead_id]["status"]
-    LEADS[lead_id]["status"] = status
-
-    return {
-        "lead_id": lead_id,
-        "previous_status": previous,
-        "new_status": status,
-        "updated": True,
-    }
+init_db()
 
 
-def create_support_ticket(subject: str, description: str, priority: str) -> dict[str, Any]:
-    priority = priority.lower().strip()
-    if priority not in {"low", "medium", "high", "urgent"}:
-        raise ValueError("Priority must be low, medium, high, or urgent.")
-
-    ticket = {
-        "ticket_id": f"TKT-{len(TICKETS) + 1001}",
-        "subject": subject.strip(),
-        "description": description.strip(),
-        "priority": priority,
-        "status": "open",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    TICKETS.append(ticket)
-    return ticket.copy()
+def now():
+    return datetime.now(timezone.utc).isoformat()
 
 
-def plan_instruction(instruction: str) -> dict[str, Any]:
-    text = instruction.strip()
-    upper = text.upper()
-
-    sku_match = re.search(r"\b(?:LAPTOP-\d+|MOUSE-\d+|MONITOR-\d+)\b", upper)
-    lead_match = re.search(r"\bLEAD-\d+\b", upper)
-
-    # Read-only inventory lookup.
-    if any(word in text.lower() for word in ("inventory", "stock", "quantity", "available")):
-        if not sku_match:
-            raise ValueError("Please include an SKU, e.g. LAPTOP-001.")
-        return {
-            "tool": "inventory_lookup",
-            "arguments": {"sku": sku_match.group(0)},
-            "write": False,
-            "decision": "Inventory lookup requested; this is a read-only operation.",
-        }
-
-    # CRM write operation.
-    if any(word in text.lower() for word in ("lead", "crm")):
-        if not lead_match:
-            raise ValueError("Please include a lead ID, e.g. LEAD-1001.")
-
-        status_match = re.search(
-            r"\b(new|contacted|qualified|proposal|won|lost)\b",
-            text.lower(),
+def record(user: dict, event: str, details: dict[str, Any]):
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO agent_audit
+            (user_id, tenant_id, timestamp, event, details)
+            VALUES (?, ?, ?, ?, ?)""",
+            (
+                str(user["user_id"]),
+                str(user["tenant_id"]),
+                now(),
+                event,
+                json.dumps(details, default=str),
+            ),
         )
-        if not status_match:
-            raise ValueError("Please specify the new lead status.")
-
-        return {
-            "tool": "update_lead_status",
-            "arguments": {
-                "lead_id": lead_match.group(0),
-                "status": status_match.group(0),
-            },
-            "write": True,
-            "decision": "CRM lead update requested; approval is required before execution.",
-        }
-
-    # Support-ticket write operation.
-    if any(word in text.lower() for word in ("ticket", "support issue", "support request")):
-        priority_match = re.search(r"\b(low|medium|high|urgent)\b", text.lower())
-        priority = priority_match.group(0) if priority_match else "medium"
-
-        subject = text[:120]
-        return {
-            "tool": "create_support_ticket",
-            "arguments": {
-                "subject": subject,
-                "description": text,
-                "priority": priority,
-            },
-            "write": True,
-            "decision": "Support ticket creation requested; approval is required before execution.",
-        }
-
-    raise ValueError(
-        "I could not identify an allowed operation. Try inventory lookup, "
-        "lead status update, or support ticket creation."
-    )
 
 
-def execute_tool(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    tools = {
-        "inventory_lookup": inventory_lookup,
-        "update_lead_status": update_lead_status,
-        "create_support_ticket": create_support_ticket,
-    }
-    if tool not in tools:
-        raise ValueError("Tool is not permitted.")
-    return tools[tool](**arguments)
+def execute_tool(tool: str, arguments: dict[str, Any]):
+    if tool == "inventory_lookup":
+        return erp_client.inventory_lookup(arguments["sku"])
+
+    if tool == "update_lead_status":
+        return erp_client.update_lead_status(
+            arguments["lead_id"],
+            arguments["status"],
+        )
+
+    if tool == "create_support_ticket":
+        return erp_client.create_ticket(
+            arguments["subject"],
+            arguments["description"],
+            arguments["priority"],
+        )
+
+    raise ValueError("Tool is not permitted.")
+
+
+def save_approval(user, tool, arguments):
+    approval_id = str(uuid.uuid4())
+
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO agent_approvals
+            (approval_id, user_id, tenant_id, tool, arguments, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?)""",
+            (
+                approval_id,
+                str(user["user_id"]),
+                str(user["tenant_id"]),
+                tool,
+                json.dumps(arguments),
+                now(),
+            ),
+        )
+
+    return approval_id
 
 
 @router.post("/run")
-def run_agent(request: AgentRequest):
+def run_agent(
+    request: AgentRequest,
+    user: dict = Depends(get_current_user),
+):
     try:
-        plan = plan_instruction(request.instruction)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        plan = plan_with_llm(request.instruction)
+    except AgentLLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
-    cycle = [
-        {"stage": "decision", "message": plan["decision"]},
-        {
-            "stage": "action",
-            "tool": plan["tool"],
-            "arguments": plan["arguments"],
-        },
-    ]
+    tool_call = plan.get("tool_call")
+    decision = plan.get("decision", "The agent evaluated the request.")
 
-    if plan["write"]:
-        approval_id = str(uuid.uuid4())
-        PENDING[approval_id] = {
-            "tool": plan["tool"],
-            "arguments": plan["arguments"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        record("approval_requested", {
-            "approval_id": approval_id,
-            "tool": plan["tool"],
-            "arguments": plan["arguments"],
+    cycles = [{"stage": "decision", "message": decision}]
+
+    if not tool_call:
+        cycles.append({
+            "stage": "observation",
+            "message": decision,
         })
-        cycle.append({
+        record(user, "agent_needs_input", {"instruction": request.instruction})
+        return {
+            "status": "needs_input",
+            "message": decision,
+            "cycles": cycles,
+        }
+
+    tool = tool_call["name"]
+    arguments = tool_call["arguments"]
+
+    if tool not in READ_TOOLS | WRITE_TOOLS:
+        raise HTTPException(status_code=422, detail="Tool is not permitted.")
+
+    cycles.append({
+        "stage": "action",
+        "tool": tool,
+        "arguments": arguments,
+    })
+
+    if tool in WRITE_TOOLS:
+        approval_id = save_approval(user, tool, arguments)
+
+        record(user, "approval_requested", {
+            "approval_id": approval_id,
+            "tool": tool,
+            "arguments": arguments,
+        })
+
+        cycles.append({
             "stage": "observation",
             "message": "Execution paused. Human approval is required.",
         })
+
         return {
             "status": "pending_approval",
             "approval_id": approval_id,
-            "tool": plan["tool"],
-            "cycles": cycle,
+            "tool": tool,
+            "arguments": arguments,
+            "cycles": cycles,
         }
 
-    # Bounded retry loop for transient tool failures.
     last_error = None
+
     for attempt in range(1, 4):
         try:
-            result = execute_tool(plan["tool"], plan["arguments"])
-            record("tool_executed", {
-                "tool": plan["tool"],
+            result = execute_tool(tool, arguments)
+
+            record(user, "tool_executed", {
+                "tool": tool,
                 "attempt": attempt,
                 "result": result,
             })
-            cycle.append({
+
+            cycles.append({
                 "stage": "observation",
-                "message": "Tool execution succeeded.",
+                "message": "ERP/CRM tool execution succeeded.",
                 "result": result,
             })
+
             return {
                 "status": "completed",
-                "tool": plan["tool"],
+                "tool": tool,
                 "attempts": attempt,
                 "result": result,
-                "cycles": cycle,
+                "cycles": cycles,
             }
-        except (ValueError, TypeError) as exc:
+
+        except ERPClientError as exc:
             last_error = str(exc)
             break
         except Exception as exc:
             last_error = str(exc)
-            if attempt < 3:
-                continue
+            break
 
-    record("tool_failed", {"tool": plan["tool"], "error": last_error})
-    raise HTTPException(status_code=502, detail={
-        "message": "Tool execution failed.",
-        "attempts": 3,
+    record(user, "tool_failed", {
+        "tool": tool,
+        "attempts": attempt,
         "error": last_error,
     })
 
+    raise HTTPException(
+        status_code=502,
+        detail={
+            "message": "ERP/CRM tool execution failed.",
+            "attempts": attempt,
+            "error": last_error,
+        },
+    )
+
 
 @router.post("/approve/{approval_id}")
-def approve_action(approval_id: str, request: ApprovalRequest):
-    pending = PENDING.pop(approval_id, None)
-    if not pending:
-        raise HTTPException(status_code=404, detail="Approval request not found or already handled.")
+def approve_action(
+    approval_id: str,
+    request: ApprovalRequest,
+    user: dict = Depends(get_current_user),
+):
+    # Only the initiating user in the same tenant may approve.
+    with get_connection() as conn:
+        pending = conn.execute(
+            """SELECT * FROM agent_approvals
+            WHERE approval_id = ?
+            AND user_id = ?
+            AND tenant_id = ?
+            AND status = 'pending'""",
+            (
+                approval_id,
+                str(user["user_id"]),
+                str(user["tenant_id"]),
+            ),
+        ).fetchone()
 
+        if not pending:
+            raise HTTPException(
+                status_code=404,
+                detail="Approval not found, already handled, or not owned by this user.",
+            )
+
+        if not request.approved:
+            conn.execute(
+                """UPDATE agent_approvals
+                SET status = 'rejected', handled_at = ?
+                WHERE approval_id = ? AND status = 'pending'""",
+                (now(), approval_id),
+            )
+            rejected_tool = pending["tool"]
+        else:
+            # Claim the approval atomically to prevent replay.
+            cursor = conn.execute(
+                """UPDATE agent_approvals
+                SET status = 'processing', handled_at = ?
+                WHERE approval_id = ? AND status = 'pending'""",
+                (now(), approval_id),
+            )
+
+            if cursor.rowcount != 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Approval is already being handled.",
+                )
+
+            tool = pending["tool"]
+            arguments = json.loads(pending["arguments"])
+
+    # Write the rejection audit event only after the transaction closes.
     if not request.approved:
-        record("approval_rejected", {"approval_id": approval_id})
-        return {"status": "rejected", "message": "The operation was not executed."}
+        record(user, "approval_rejected", {
+            "approval_id": approval_id,
+            "tool": rejected_tool,
+        })
+
+        return {
+            "status": "rejected",
+            "message": "The operation was not executed.",
+        }
 
     try:
-        result = execute_tool(pending["tool"], pending["arguments"])
-    except (ValueError, TypeError) as exc:
-        record("approved_tool_failed", {"approval_id": approval_id, "error": str(exc)})
-        raise HTTPException(status_code=422, detail=str(exc))
+        result = execute_tool(tool, arguments)
 
-    record("approved_tool_executed", {
-        "approval_id": approval_id,
-        "tool": pending["tool"],
-        "result": result,
-    })
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE agent_approvals SET status = 'completed' WHERE approval_id = ?",
+                (approval_id,),
+            )
+
+        record(user, "approved_tool_executed", {
+            "approval_id": approval_id,
+            "tool": tool,
+            "result": result,
+        })
+
+        return {
+            "status": "completed",
+            "tool": tool,
+            "result": result,
+            "observation": "Approved operation executed successfully.",
+        }
+
+    except Exception as exc:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE agent_approvals SET status = 'failed' WHERE approval_id = ?",
+                (approval_id,),
+            )
+
+        record(user, "approved_tool_failed", {
+            "approval_id": approval_id,
+            "tool": tool,
+            "error": str(exc),
+        })
+
+        raise HTTPException(
+            status_code=502,
+            detail="Approved ERP/CRM operation failed. Check the audit log.",
+        )
+
+
+@router.get("/approvals")
+def list_approvals(user: dict = Depends(get_current_user)):
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT approval_id, tool, arguments, status, created_at, handled_at
+            FROM agent_approvals
+            WHERE user_id = ? AND tenant_id = ?
+            ORDER BY created_at DESC LIMIT 100""",
+            (str(user["user_id"]), str(user["tenant_id"])),
+        ).fetchall()
+
     return {
-        "status": "completed",
-        "tool": pending["tool"],
-        "result": result,
-        "observation": "Approved operation executed successfully.",
+        "approvals": [
+            {
+                **dict(row),
+                "arguments": json.loads(row["arguments"]),
+            }
+            for row in rows
+        ]
     }
 
 
 @router.get("/tools")
-def list_tools():
+def list_tools(user: dict = Depends(get_current_user)):
     return {
         "tools": [
-            {"name": "inventory_lookup", "type": "read"},
+            {"name": "inventory_lookup", "type": "read", "requires_approval": False},
             {"name": "update_lead_status", "type": "write", "requires_approval": True},
             {"name": "create_support_ticket", "type": "write", "requires_approval": True},
         ]
@@ -282,26 +386,23 @@ def list_tools():
 
 
 @router.get("/audit")
-def get_audit_log():
-    return {"count": len(AUDIT_LOG), "events": AUDIT_LOG[-100:]}
+def get_audit_log(user: dict = Depends(get_current_user)):
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT timestamp, event, details
+            FROM agent_audit
+            WHERE tenant_id = ?
+            ORDER BY id DESC LIMIT 100""",
+            (str(user["tenant_id"]),),
+        ).fetchall()
 
+    events = [
+        {
+            "timestamp": row["timestamp"],
+            "event": row["event"],
+            "details": json.loads(row["details"]),
+        }
+        for row in rows
+    ]
 
-@router.get("/mock/inventory/{sku}")
-def mock_inventory_endpoint(sku: str):
-    try:
-        return inventory_lookup(sku)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-
-@router.get("/mock/leads/{lead_id}")
-def mock_lead_endpoint(lead_id: str):
-    lead = LEADS.get(lead_id.upper())
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found.")
-    return lead
-
-
-@router.get("/mock/tickets")
-def mock_tickets_endpoint():
-    return {"tickets": TICKETS}
+    return {"count": len(events), "events": events}
