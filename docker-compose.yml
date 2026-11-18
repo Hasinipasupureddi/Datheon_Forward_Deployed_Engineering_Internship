@@ -42,7 +42,7 @@
   erp-mock:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.erp
 
     container_name: datheon-erp-mock
 
