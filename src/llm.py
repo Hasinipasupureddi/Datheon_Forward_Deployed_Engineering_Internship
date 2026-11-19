@@ -4,6 +4,8 @@ import re
 import urllib.request
 import urllib.error
 
+from src.monitoring import record_token_usage
+
 OLLAMA_URL = os.getenv(
     "OLLAMA_URL",
     "http://localhost:11434/api/chat"
@@ -153,6 +155,12 @@ ANSWER:
     try:
         with urllib.request.urlopen(request, timeout=180) as response:
             result = json.loads(response.read().decode("utf-8"))
+
+        record_token_usage(
+            MODEL_NAME,
+            result.get("prompt_eval_count", 0),
+            result.get("eval_count", 0),
+        )
 
         answer = result.get("message", {}).get("content", "").strip()
 

@@ -1,6 +1,8 @@
 ﻿import os
 import requests
 
+from src.monitoring import record_token_usage
+
 OLLAMA_URL = os.getenv(
     "OLLAMA_URL",
     "http://localhost:11434/api/chat"
@@ -164,6 +166,12 @@ def plan_with_llm(instruction):
         )
         response.raise_for_status()
         data = response.json()
+
+        record_token_usage(
+            OLLAMA_MODEL,
+            data.get("prompt_eval_count", 0),
+            data.get("eval_count", 0),
+        )
 
     except requests.RequestException as exc:
         raise AgentLLMError(f"Could not reach local Ollama: {exc}") from exc

@@ -1,8 +1,8 @@
-﻿# Datheon - Forward Deployed Engineering Internship
+﻿# Datheon – Forward Deployed Engineering Internship
 
 An enterprise-oriented document ingestion, multi-tenant Retrieval-Augmented Generation (RAG), and autonomous ERP/CRM field-agent application developed as part of the Datheon Forward Deployed Engineering Internship.
 
-The project demonstrates document processing, vector search, enterprise access control, grounded LLM responses, tool orchestration, human approval workflows, audit logging, and containerized deployment.
+The project demonstrates document processing, vector search, enterprise access control, grounded LLM responses, tool orchestration, human approval workflows, audit logging, containerized deployment, and monitoring.
 
 ## Project Overview
 
@@ -15,7 +15,7 @@ The application is organized around four internship tasks:
 
 ## Implemented Tasks
 
-### Task 1 - Legacy Data Ingestion and Vector ETL
+### Task 1 – Legacy Data Ingestion and Vector ETL
 
 Implemented document ingestion and processing capabilities:
 
@@ -27,7 +27,9 @@ Implemented document ingestion and processing capabilities:
 - Persistent ChromaDB vector storage.
 - Similarity-based document retrieval.
 
-### Task 2 - Enterprise Multi-Tenant RAG with RBAC
+**Implementation:** Document readers, chunking modules, ingestion pipeline, vector storage, and pipeline tests.
+
+### Task 2 – Enterprise Multi-Tenant RAG with RBAC
 
 Implemented an authenticated enterprise RAG application:
 
@@ -39,24 +41,27 @@ Implemented an authenticated enterprise RAG application:
 - Role-based access control.
 - Department and clearance-level filtering.
 - ChromaDB vector retrieval.
-- Cross-Encoder reranking.
+- Cross-Encoder reranking using Sentence Transformers.
 - Rule-based query rewriting.
 - Local LLM integration through Ollama and Qwen 2.5 3B.
 - Grounded answer generation using retrieved context.
 - Source and page-level citation metadata.
-- Citation reference validation and abstention handling.
+- Citation reference validation.
+- Abstention handling when relevant supporting information is unavailable.
 
-### Task 3 - Autonomous Field Agent with ERP/CRM Tool Orchestration
+**Implementation:** Authentication, retrieval, reranking, query rewriting, LLM generation, citation validation, and protected FastAPI endpoints.
+
+### Task 3 – Autonomous Field Agent with ERP/CRM Tool Orchestration
 
 Implemented an LLM-powered field agent that interacts with a separate mock ERP/CRM REST API.
 
-**Supported tools:**
+#### Supported Tools
 
-- `inventory_lookup` - Retrieve inventory information using an SKU.
-- `update_lead_status` - Retrieve and update a lead's status.
-- `create_support_ticket` - Create a support ticket.
+- `inventory_lookup` – Retrieve inventory information using an SKU.
+- `update_lead_status` – Update a lead's status.
+- `create_support_ticket` – Create a support ticket.
 
-**Agent workflow:**
+#### Agent Workflow
 
 1. An authenticated user submits an instruction to the field agent.
 2. The agent uses Ollama and Qwen 2.5 3B to identify an appropriate tool and its arguments.
@@ -67,21 +72,21 @@ Implemented an LLM-powered field agent that interacts with a separate mock ERP/C
 7. Approved operations execute through the ERP API client.
 8. The application records decisions, actions, observations, approval status, and audit events.
 
-**Additional implementation details:**
+#### Additional Implementation Details
 
 - Separate FastAPI-based mock ERP/CRM service.
 - SQLite-backed mock ERP data.
 - Persistent approval and audit records.
-- User and tenant-scoped approval access.
+- User- and tenant-scoped approval access.
 - Approval replay protection.
 - Atomic approval state transitions.
 - ERP API request timeouts.
 - Bounded retries with exponential backoff for eligible transient failures.
 - No automatic retry of ticket-creation POST requests, avoiding duplicate side effects.
 
-The mock ERP/CRM service provides a controlled environment for demonstrating enterprise tool orchestration. It is not a connection to a real enterprise ERP system.
+The mock ERP/CRM service provides a controlled environment for demonstrating enterprise tool orchestration. It is not connected to a real enterprise ERP system.
 
-### Task 4 - Containerized Deployment and Monitoring
+### Task 4 – Containerized Deployment and Monitoring
 
 Implemented a local Docker Compose deployment:
 
@@ -94,9 +99,12 @@ Implemented a local Docker Compose deployment:
 - Host Ollama connectivity through `host.docker.internal`.
 - Prometheus metrics endpoint.
 - HTTP request count, latency, and error monitoring.
+- Local LLM prompt and completion token usage metrics.
 - Localhost-only host port binding.
 
-The current implementation demonstrates local containerized deployment, not deployment inside an actual client VPC.
+The application was built and run using Docker Compose. Both containers were verified as healthy, and the API, monitoring endpoint, and RAG query workflow were tested.
+
+**Deployment scope:** The current implementation demonstrates local containerized deployment, not deployment inside an actual client VPC. Client-specific VPC deployment requires separate infrastructure, networking, secrets, and security configuration.
 
 ## Technology Stack
 
@@ -108,7 +116,7 @@ The current implementation demonstrates local containerized deployment, not depl
 | Vector database | ChromaDB |
 | Embeddings | ChromaDB Default Embedding Function |
 | Reranking | Sentence Transformers Cross-Encoder |
-| LLM | Ollama - Qwen 2.5 3B |
+| LLM | Ollama – Qwen 2.5 3B |
 | Authentication | JWT |
 | Password hashing | Argon2 |
 | Application databases | SQLite |
@@ -152,8 +160,10 @@ Project/
 │   ├── test_pipeline.py
 │   ├── test_query_rewriter.py
 │   ├── test_rag_integration.py
-│   ├── test_rbac.py
-│   └── other test modules
+│   └── test_rbac.py
+├── scripts/
+│   ├── benchmark.py
+│   └── benchmark_report.md
 ├── data/
 │   └── raw/
 ├── Dockerfile
@@ -165,7 +175,7 @@ Project/
 └── README.md
 ```
 
-Runtime databases, vector stores, and private documents are maintained locally and are not intended to be committed to the public repository.
+Runtime databases, vector stores, private documents, and environment secrets are maintained locally and are not intended to be committed to the public repository.
 
 ## Prerequisites
 
@@ -183,27 +193,27 @@ ollama pull qwen2.5:3b
 
 ## Local Setup
 
-### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/Hasinipasupureddi/Datheon_Forward_Deployed_Engineering_Internship.git
 cd Datheon_Forward_Deployed_Engineering_Internship
 ```
 
-### 2. Create and activate a virtual environment
+### 2. Create and Activate a Virtual Environment
 
 ```powershell
 python -m venv .venv312
 .\.venv312\Scripts\Activate.ps1
 ```
 
-### 3. Install dependencies
+### 3. Install Dependencies
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### 4. Configure Environment Variables
 
 Create a local environment file using the example:
 
@@ -213,7 +223,7 @@ Copy-Item .env.example .env
 
 Edit `.env` and replace the placeholder with a strong, randomly generated `JWT_SECRET_KEY`.
 
-Never commit the actual `.env` file or production secrets.
+Never commit the actual `.env` file, passwords, access tokens, or production secrets.
 
 ### 5. Start Ollama
 
@@ -223,7 +233,7 @@ Ensure Ollama is running and the required model is available:
 ollama list
 ```
 
-### 6. Start the mock ERP/CRM service
+### 6. Start the Mock ERP/CRM Service
 
 Open a separate terminal, activate the virtual environment, and run:
 
@@ -231,7 +241,7 @@ Open a separate terminal, activate the virtual environment, and run:
 uvicorn src.mock_erp:app --host 127.0.0.1 --port 8001
 ```
 
-### 7. Start the main API
+### 7. Start the Main API
 
 In another terminal, activate the virtual environment and run:
 
@@ -241,13 +251,11 @@ uvicorn src.api:app --host 127.0.0.1 --port 8000
 
 The main API is available at:
 
-```text
-http://127.0.0.1:8000
-```
+`http://127.0.0.1:8000`
 
 ## Docker Deployment
 
-Make sure Docker Desktop and Ollama are running.
+Ensure Docker Desktop and Ollama are running.
 
 Configure `.env` with a strong JWT secret before starting the application.
 
@@ -279,15 +287,11 @@ The Compose configuration publishes:
 
 The RAG API communicates with the mock ERP/CRM service internally using:
 
-```text
-http://erp-mock:8001
-```
+`http://erp-mock:8001`
 
 The container connects to the host Ollama service through:
 
-```text
-http://host.docker.internal:11434
-```
+`http://host.docker.internal:11434`
 
 Stop the services:
 
@@ -395,11 +399,19 @@ Prometheus metrics are exposed through:
 GET /metrics
 ```
 
-The monitoring middleware tracks:
+The monitoring implementation tracks:
 
 - HTTP request counts.
 - Request latency.
-- Request errors.
+- HTTP errors.
+- LLM prompt token usage.
+- LLM completion token usage.
+
+The LLM token counter is exposed as:
+
+`datheon_llm_tokens_total`
+
+Token metrics include model and token type labels.
 
 Health status is available through:
 
@@ -409,6 +421,65 @@ GET /health
 
 The application and mock ERP/CRM services also have Docker health checks.
 
+## Client Integration Guide
+
+### 1. Start the Services
+
+Ensure Docker Desktop and Ollama are running. Configure the required environment variables using `.env.example` and your local `.env` file.
+
+Start the services:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+### 2. Verify Service Availability
+
+- API documentation: `http://localhost:8000/docs`
+- Health endpoint: `http://localhost:8000/health`
+- Prometheus metrics: `http://localhost:8000/metrics`
+- Mock ERP health: `http://localhost:8001/health`
+
+### 3. Authenticate
+
+Send a POST request to `/login` with JSON credentials:
+
+```json
+{
+  "username": "your_username",
+  "password": "your_password"
+}
+```
+
+Use the returned access token as a Bearer token in subsequent authenticated API requests.
+
+### 4. Submit a RAG Query
+
+Send a POST request to `/query` with a valid Bearer token and a JSON request body matching the API schema.
+
+The response includes the generated answer, source citations, and citation validation status.
+
+### 5. Monitor the Service
+
+Configure Prometheus-compatible monitoring to scrape `/metrics`.
+
+Available metrics include HTTP request counts, request latency, HTTP errors, and local LLM token usage.
+
+### 6. Security and Handoff Checklist
+
+- Generate a unique, strong JWT secret for each deployment.
+- Never commit `.env`, passwords, access tokens, or private documents.
+- Configure HTTPS and network access controls before external exposure.
+- Restrict service access to authorized client networks.
+- Back up persistent application data securely.
+- Validate tenant isolation and authorization with client-specific test accounts.
+- Review logs, health checks, and monitoring before handoff.
+
+### Deployment Scope
+
+This guide covers local Docker Compose integration. Client VPC deployment requires client-specific networking, infrastructure, secrets, and security configuration before production use.
+
 ## Testing
 
 Run the complete test suite:
@@ -417,7 +488,7 @@ Run the complete test suite:
 python -m pytest -q
 ```
 
-The complete project test suite was verified with **46 passing tests** in the development environment.
+The project test suite was verified with **46 passing tests** in the development environment.
 
 The field-agent integration tests cover:
 
@@ -442,6 +513,25 @@ Check container health:
 docker compose ps
 ```
 
+## Task 4 – Latency Benchmark Results
+
+Local Docker deployment benchmarked on **19 November 2026**.
+
+| Endpoint | Requests | Average | Minimum | Maximum |
+|---|---:|---:|---:|---:|
+| Health | 10 | 2.69 ms | 2.13 ms | 4.76 ms |
+| RAG Query | 3 | 13,540.13 ms | 5,424.27 ms | 29,671.86 ms |
+
+- Successful grounded RAG queries: 3/3
+- LLM: Ollama Qwen 2.5 3B
+- Environment: Local Docker deployment
+
+The benchmark script is available at `scripts/benchmark.py`.
+
+Detailed results are available in `scripts/benchmark_report.md`.
+
+These are local benchmark observations, not production SLA guarantees. Results depend on the local machine, model, data, and runtime conditions.
+
 ## Important Data and Deployment Notes
 
 - User databases, vector databases, environment secrets, and private source documents are not intended for public repository commits.
@@ -464,6 +554,6 @@ docker compose ps
 
 ## Project Repository
 
-[Datheon - Forward Deployed Engineering Internship](https://github.com/Hasinipasupureddi/Datheon_Forward_Deployed_Engineering_Internship)
+[Datheon – Forward Deployed Engineering Internship](https://github.com/Hasinipasupureddi/Datheon_Forward_Deployed_Engineering_Internship)
 
 Developed as an internship project demonstrating document processing, enterprise RAG, secure access control, autonomous tool orchestration, human approval workflows, and containerized API deployment.

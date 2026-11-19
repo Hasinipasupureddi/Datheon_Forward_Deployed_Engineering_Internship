@@ -67,3 +67,24 @@ def install_metrics(app):
             content=generate_latest(),
             media_type=CONTENT_TYPE_LATEST,
         )
+
+
+LLM_TOKEN_COUNT = Counter(
+    "datheon_llm_tokens_total",
+    "Total tokens processed by local LLMs",
+    ["model", "token_type"],
+)
+
+
+def record_token_usage(model, prompt_tokens, completion_tokens):
+    usage = {
+        "prompt": prompt_tokens,
+        "completion": completion_tokens,
+    }
+
+    for token_type, count in usage.items():
+        if isinstance(count, int) and count > 0:
+            LLM_TOKEN_COUNT.labels(
+                model=model,
+                token_type=token_type,
+            ).inc(count)
