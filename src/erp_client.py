@@ -1,4 +1,6 @@
-﻿import os
+"""HTTP client for the mock ERP/CRM service with bounded safe retries."""
+
+import os
 import time
 import requests
 
@@ -18,6 +20,7 @@ class ERPClient:
         self.session = requests.Session()
 
     def _request(self, method, path, payload=None):
+        """Perform one request, retrying only safe methods on transient failures."""
         url = f"{self.base_url}{path}"
 
         # GET and PATCH are safe to retry for this mock service.
@@ -60,12 +63,15 @@ class ERPClient:
         raise ERPClientError("ERP API request failed.")
 
     def inventory_lookup(self, sku):
+        """Look up inventory by SKU."""
         return self._request("GET", f"/inventory/{sku}")
 
     def get_lead(self, lead_id):
+        """Retrieve a lead by ID."""
         return self._request("GET", f"/leads/{lead_id}")
 
     def update_lead_status(self, lead_id, status):
+        """Update a lead status using the retryable PATCH method."""
         return self._request(
             "PATCH",
             f"/leads/{lead_id}/status",
@@ -73,6 +79,7 @@ class ERPClient:
         )
 
     def create_ticket(self, subject, description, priority="medium"):
+        """Create a ticket once; POST is intentionally never retried."""
         return self._request(
             "POST",
             "/tickets",
@@ -84,6 +91,7 @@ class ERPClient:
         )
 
     def list_tickets(self):
+        """List tickets from the ERP/CRM service."""
         return self._request("GET", "/tickets")
 
 

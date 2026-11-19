@@ -1,4 +1,6 @@
-﻿import os
+"""Plan allowlisted ERP/CRM tool calls with the local Ollama model."""
+
+import os
 import requests
 
 from src.monitoring import record_token_usage
@@ -75,6 +77,7 @@ class AgentLLMError(Exception):
 
 
 def validate_tool_call(name, arguments):
+    """Validate the model's tool name, exact arguments, and field limits."""
     if name not in ALLOWED_TOOLS:
         raise AgentLLMError(f"Tool is not allowed: {name}")
 
@@ -127,6 +130,7 @@ def validate_tool_call(name, arguments):
 
 
 def plan_with_llm(instruction):
+    """Request one tool decision and reject malformed model output."""
     if not isinstance(instruction, str) or not 3 <= len(instruction.strip()) <= 1000:
         raise AgentLLMError("Instruction must contain 3 to 1000 characters.")
 

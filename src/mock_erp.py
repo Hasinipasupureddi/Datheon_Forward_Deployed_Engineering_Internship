@@ -1,4 +1,6 @@
-﻿import os
+"""SQLite-backed mock ERP/CRM API used for safe local agent integration tests."""
+
+import os
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
@@ -23,12 +25,14 @@ ALLOWED_PRIORITIES = {"low", "medium", "high", "urgent"}
 
 
 def get_connection():
+    """Open the mock ERP database with a bounded SQLite lock wait."""
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
+    """Create mock tables and seed deterministic demo inventory and leads."""
     with get_connection() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS inventory (
@@ -92,11 +96,13 @@ class TicketCreate(BaseModel):
 
 @app.get("/health")
 def health():
+    """Return the ERP service liveness response."""
     return {"status": "healthy", "service": "mock-erp-crm"}
 
 
 @app.get("/inventory/{sku}")
 def inventory_lookup(sku: str):
+    """Return one inventory row by normalized SKU."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM inventory WHERE sku = ?",
@@ -111,6 +117,7 @@ def inventory_lookup(sku: str):
 
 @app.get("/leads/{lead_id}")
 def get_lead(lead_id: str):
+    """Return one lead by normalized ID."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM leads WHERE lead_id = ?",
@@ -125,6 +132,7 @@ def get_lead(lead_id: str):
 
 @app.patch("/leads/{lead_id}/status")
 def update_lead(lead_id: str, request: LeadUpdate):
+    """Validate and update a lead's status."""
     lead_id = lead_id.strip().upper()
     status = request.status.strip().lower()
 
@@ -160,6 +168,7 @@ def update_lead(lead_id: str, request: LeadUpdate):
 
 @app.post("/tickets", status_code=201)
 def create_ticket(request: TicketCreate):
+    """Create a support ticket in the mock database."""
     priority = request.priority.strip().lower()
 
     if priority not in ALLOWED_PRIORITIES:
@@ -205,6 +214,7 @@ def create_ticket(request: TicketCreate):
 
 @app.get("/tickets")
 def list_tickets():
+    """Return tickets ordered from newest to oldest."""
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM tickets ORDER BY created_at DESC"

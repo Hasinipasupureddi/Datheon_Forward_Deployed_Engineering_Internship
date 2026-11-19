@@ -1,4 +1,6 @@
 
+"""SQLite user authentication, Argon2 password hashing, and JWT helpers."""
+
 import os
 import sqlite3
 import uuid
@@ -18,11 +20,13 @@ CLEARANCE_LEVELS = ["public", "internal", "confidential"]
 
 
 def get_connection():
+    """Open the local user database, creating its parent directory if needed."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     return sqlite3.connect(DB_PATH)
 
 
 def init_db():
+    """Create the user schema and migrate the clearance column when required."""
     with get_connection() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -58,6 +62,7 @@ def create_user(
     department=None,
     clearance_level="public"
 ):
+    """Validate and persist a user with a one-way Argon2 password hash."""
     if role not in ROLES:
         raise ValueError("Invalid role")
 
@@ -97,6 +102,7 @@ def create_user(
 
 
 def get_user_by_username(username):
+    """Return a user record by username, or ``None`` when absent."""
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
@@ -108,6 +114,7 @@ def get_user_by_username(username):
 
 
 def get_user_by_id(user_id):
+    """Return an active user record by ID, or ``None`` when absent."""
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
@@ -122,10 +129,12 @@ def get_user_by_id(user_id):
 
 
 def verify_password(plain_password, hashed_password):
+    """Verify a plaintext password against its Argon2 hash."""
     return password_hash.verify(plain_password, hashed_password)
 
 
 def create_access_token(user_id):
+    """Create a one-hour JWT whose subject identifies the user record."""
     secret = os.getenv("JWT_SECRET_KEY")
 
     if not secret:
@@ -140,6 +149,7 @@ def create_access_token(user_id):
 
 
 def decode_access_token(token):
+    """Decode and validate a JWT using the configured application secret."""
     secret = os.getenv("JWT_SECRET_KEY")
 
     if not secret:

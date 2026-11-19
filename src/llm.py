@@ -1,4 +1,6 @@
-﻿import json
+"""Generate citation-validated answers from locally retrieved context."""
+
+import json
 import os
 import re
 import urllib.request
@@ -26,6 +28,7 @@ ABSTENTION_PATTERNS = [
 
 
 def is_abstention(answer):
+    """Detect common model phrases that indicate unsupported evidence."""
     return any(
         re.search(pattern, answer.lower())
         for pattern in ABSTENTION_PATTERNS
@@ -33,6 +36,7 @@ def is_abstention(answer):
 
 
 def validate_citations(answer, available_citations):
+    """Remove unknown citation markers and abstain if none remain valid."""
     citation_numbers = [
         int(number)
         for number in re.findall(r"\[(\d+)\]", answer)
@@ -80,6 +84,7 @@ def validate_citations(answer, available_citations):
 
 
 def generate_grounded_answer(query, retrieved_chunks):
+    """Ask the local model for an answer restricted to retrieved chunks."""
     if not retrieved_chunks:
         return {
             "answer": (

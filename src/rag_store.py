@@ -1,4 +1,6 @@
 
+"""Store and retrieve tenant-isolated RAG document chunks."""
+
 import chromadb
 
 client = chromadb.PersistentClient(
@@ -14,6 +16,7 @@ collection = client.get_or_create_collection(
 
 
 def store_rag_documents(documents):
+    """Upsert RAG chunks using their stable tenant-scoped IDs."""
     if not documents:
         return 0
 
@@ -33,6 +36,7 @@ def search_rag_documents(
     department=None,
     n_results=5
 ):
+    """Query only documents allowed by tenant, clearance, and department."""
     if not tenant_id:
         raise ValueError("Tenant ID is required")
 

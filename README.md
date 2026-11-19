@@ -485,8 +485,12 @@ This guide covers local Docker Compose integration. Client VPC deployment requir
 Run the complete test suite:
 
 ```powershell
+$env:JWT_SECRET_KEY = "test-only-placeholder"
 python -m pytest -q
 ```
+
+The test suite requires `JWT_SECRET_KEY`; the command above uses a process-local
+placeholder and does not create or expose a production secret.
 
 The project test suite was verified with **46 passing tests** in the development environment.
 

@@ -1,11 +1,14 @@
-﻿import os
+"""Measure local API health and grounded-query latency without exposing passwords."""
+
+import getpass
+import os
 import time
 import statistics
 import requests
 
 BASE_URL = "http://127.0.0.1:8000"
 USERNAME = input("Enter your login username: ")
-PASSWORD = input("Enter your login password: ")
+PASSWORD = getpass.getpass("Enter your login password: ")
 
 session = requests.Session()
 

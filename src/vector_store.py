@@ -1,4 +1,6 @@
 
+"""Persist legacy document chunks in a cosine-similarity Chroma collection."""
+
 import chromadb
 
 client = chromadb.PersistentClient(path="data/chroma_db")
@@ -12,6 +14,7 @@ collection = client.get_or_create_collection(
 
 
 def reset_collection():
+    """Delete and recreate the legacy collection."""
     global collection
 
     client.delete_collection(COLLECTION_NAME)
@@ -25,6 +28,7 @@ def reset_collection():
 
 
 def store_documents(documents):
+    """Upsert document content and metadata, preserving stable chunk IDs."""
     if not documents:
         print("No documents to store.")
         return
@@ -39,6 +43,7 @@ def store_documents(documents):
 
 
 def search_documents(query_text, allowed_access_tiers, department=None, n_results=3):
+    """Return only documents matching the requested access and department scope."""
     if not allowed_access_tiers:
         raise ValueError("At least one access tier is required")
 

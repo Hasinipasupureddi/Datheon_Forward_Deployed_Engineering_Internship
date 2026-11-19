@@ -1,8 +1,11 @@
+"""Load supported PDF, CSV, and Markdown files as plain text."""
+
 import csv
 from pathlib import Path
 from document_reader import read_pdf  # Imports the PDF reader
 
 def read_csv(file_path):
+    """Read a CSV file into a list of dictionaries keyed by column name."""
     file_path = Path(file_path)  # Converts the path into a Path object
 
     records = []  # Stores CSV records
@@ -16,6 +19,7 @@ def read_csv(file_path):
     return records
 
 def read_markdown(file_path):
+    """Read a Markdown file without altering its source text."""
     file_path = Path(file_path)  # Converts the path into a Path object
 
     with open(file_path, "r", encoding="utf-8") as file:
@@ -24,6 +28,7 @@ def read_markdown(file_path):
     return text
 
 def load_document(file_path):
+    """Dispatch a supported file path to its format-specific reader."""
     file_path = Path(file_path)  # Converts the path into a Path object
 
     extension = file_path.suffix.lower()  # Gets the file extension

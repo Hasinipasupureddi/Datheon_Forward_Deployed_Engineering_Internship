@@ -1,4 +1,6 @@
 
+"""Build metadata-enriched document chunks for the legacy ingestion pipeline."""
+
 from multi_format_reader import load_document
 from chunker import chunk_text
 from pathlib import Path
@@ -6,6 +8,7 @@ from datetime import date
 
 
 def ingest_document(file_path, department="General", access_tier="public"):
+    """Read one supported document, chunk it, and attach retrieval metadata."""
     file_path = Path(file_path)  # Converts the path into a Path object
     text = load_document(file_path)  # Extracts document content
     chunks = chunk_text(text)  # Divides content into chunks
@@ -29,6 +32,7 @@ def ingest_document(file_path, department="General", access_tier="public"):
 
 
 def ingest_directory(directory, metadata_by_file=None):
+    """Ingest every supported file in a directory as one batch."""
     directory = Path(directory)
     all_documents = []  # Stores chunks from all supported files
 

@@ -1,4 +1,6 @@
-﻿import jwt
+"""FastAPI dependencies for bearer-token authentication and user loading."""
+
+import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -13,6 +15,7 @@ security = HTTPBearer()
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
+    """Require a valid JWT and return the corresponding active user."""
     try:
         payload = decode_access_token(credentials.credentials)
         user_id = payload.get("sub")

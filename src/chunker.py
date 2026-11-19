@@ -1,4 +1,6 @@
 
+"""Create semantically coherent chunks from paragraph-separated text."""
+
 import re
 import math
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
@@ -8,6 +10,7 @@ embedding_function = DefaultEmbeddingFunction()
 
 
 def cosine_similarity(vector_a, vector_b):
+    """Return cosine similarity, treating zero-length vectors as unrelated."""
     dot_product = sum(a * b for a, b in zip(vector_a, vector_b))
     norm_a = math.sqrt(sum(a * a for a in vector_a))
     norm_b = math.sqrt(sum(b * b for b in vector_b))
@@ -19,6 +22,7 @@ def cosine_similarity(vector_a, vector_b):
 
 
 def chunk_text(text, chunk_size=800, similarity_threshold=0.35):
+    """Group similar paragraphs without exceeding the configured size."""
     paragraphs = re.split(r"\n\s*\n", text)
     paragraphs = [p.strip() for p in paragraphs if p.strip()]
 

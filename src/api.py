@@ -1,4 +1,6 @@
-﻿
+
+"""FastAPI application for authenticated, tenant-aware document retrieval."""
+
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -65,6 +67,7 @@ class QueryRequest(BaseModel):
 
 @app.get("/")
 def home():
+    """Return basic service information for operators and health probes."""
     return {
         "message": "Datheon Enterprise RAG API is running",
         "version": "2.3.0"
@@ -73,11 +76,13 @@ def home():
 
 @app.get("/health")
 def health():
+    """Return the liveness response used by local and Docker checks."""
     return {"status": "healthy"}
 
 
 @app.post("/login")
 def login(request: LoginRequest):
+    """Authenticate a user without revealing which credential failed."""
     user = get_user_by_username(request.username)
 
     if (
@@ -103,6 +108,7 @@ def login(request: LoginRequest):
 
 @app.get("/me")
 def get_profile(user: dict = Depends(get_current_user)):
+    """Return non-secret identity and authorization attributes."""
     return {
         "username": user["username"],
         "role": user["role"],
@@ -117,6 +123,7 @@ def query_documents(
     request: QueryRequest,
     user: dict = Depends(get_current_user)
 ):
+    """Retrieve, rerank, and ground an answer within the user's authorization scope."""
     # Step 1: Validate clearance
     clearance = user["clearance_level"]
 
@@ -149,6 +156,8 @@ def query_documents(
     # Step 3: Rewrite original query
     rewritten_query = rewrite_query(request.query)
 
+    # Apply tenant, clearance, and department filters before retrieval so
+    # unauthorized chunks cannot reach reranking or the language model.
     # Step 4: Retrieve only authorized documents
     results = search_rag_documents(
         query=rewritten_query,

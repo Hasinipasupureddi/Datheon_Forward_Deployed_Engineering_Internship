@@ -1,3 +1,5 @@
+"""Extract text from PDFs, using OCR when a PDF has no text layer."""
+
 import os
 import shutil
 from pathlib import Path
@@ -25,6 +27,7 @@ POPPLER_PATH = os.getenv("POPPLER_PATH") or (
 
 
 def read_pdf(file_path):
+    """Return all PDF text, falling back to Tesseract for scanned pages."""
     reader = PdfReader(file_path)
     text = ""
 
@@ -52,6 +55,7 @@ def read_pdf(file_path):
 
 
 def save_text(text, output_path):
+    """Write extracted text to a UTF-8 file, creating parent directories."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

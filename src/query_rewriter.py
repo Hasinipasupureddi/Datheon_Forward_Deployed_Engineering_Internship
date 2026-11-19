@@ -1,4 +1,6 @@
 
+"""Apply deterministic normalization and domain-term expansion to queries."""
+
 import re
 
 TERM_EXPANSIONS = {
@@ -16,6 +18,7 @@ TERM_EXPANSIONS = {
 
 
 def rewrite_query(query):
+    """Normalize a user query and expand its first recognized technical term."""
     if not query or not query.strip():
         raise ValueError("Query cannot be empty")
 

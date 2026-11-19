@@ -1,10 +1,13 @@
 
+"""Command-line entry point for the legacy ingestion and retrieval demo."""
+
 import time
 import vector_store
 from ingest import ingest_directory
 
 
 def main():
+    """Reset the sample collection, ingest documents, and print timings."""
     print("Welcome to Enterprise AI Document Assistant!")
 
     metadata = {

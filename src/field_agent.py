@@ -1,4 +1,6 @@
-﻿import json
+"""Authenticated field-agent routes, approvals, and tenant-scoped audit logs."""
+
+import json
 import sqlite3
 import uuid
 from pathlib import Path
@@ -36,12 +38,14 @@ class ApprovalRequest(BaseModel):
 
 
 def get_connection():
+    """Open the agent state database with row-style results."""
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
+    """Create approval and audit tables and their query indexes."""
     with get_connection() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS agent_approvals (
@@ -76,10 +80,12 @@ init_db()
 
 
 def now():
+    """Return a timezone-aware ISO timestamp for persisted agent events."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def record(user: dict, event: str, details: dict[str, Any]):
+    """Append an audit event scoped to the acting user and tenant."""
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO agent_audit
@@ -96,6 +102,7 @@ def record(user: dict, event: str, details: dict[str, Any]):
 
 
 def execute_tool(tool: str, arguments: dict[str, Any]):
+    """Dispatch only the explicitly allowlisted ERP/CRM operations."""
     if tool == "inventory_lookup":
         return erp_client.inventory_lookup(arguments["sku"])
 
@@ -116,6 +123,7 @@ def execute_tool(tool: str, arguments: dict[str, Any]):
 
 
 def save_approval(user, tool, arguments):
+    """Persist a pending write operation owned by one user and tenant."""
     approval_id = str(uuid.uuid4())
 
     with get_connection() as conn:
@@ -141,6 +149,7 @@ def run_agent(
     request: AgentRequest,
     user: dict = Depends(get_current_user),
 ):
+    """Plan a tool call, execute reads, and pause writes for approval."""
     try:
         plan = plan_with_llm(request.instruction)
     except AgentLLMError as exc:
@@ -252,7 +261,9 @@ def approve_action(
     request: ApprovalRequest,
     user: dict = Depends(get_current_user),
 ):
-    # Only the initiating user in the same tenant may approve.
+    """Atomically consume an owned approval before executing its operation."""
+    # Ownership and tenant predicates prevent cross-user and cross-tenant
+    # approval access before the state transition is attempted.
     with get_connection() as conn:
         pending = conn.execute(
             """SELECT * FROM agent_approvals
@@ -282,7 +293,8 @@ def approve_action(
             )
             rejected_tool = pending["tool"]
         else:
-            # Claim the approval atomically to prevent replay.
+            # Claiming only pending rows makes a second approval request fail,
+            # preventing replay and duplicate side effects.
             cursor = conn.execute(
                 """UPDATE agent_approvals
                 SET status = 'processing', handled_at = ?
@@ -354,6 +366,7 @@ def approve_action(
 
 @router.get("/approvals")
 def list_approvals(user: dict = Depends(get_current_user)):
+    """List only approvals initiated by the authenticated user in its tenant."""
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT approval_id, tool, arguments, status, created_at, handled_at
@@ -376,6 +389,7 @@ def list_approvals(user: dict = Depends(get_current_user)):
 
 @router.get("/tools")
 def list_tools(user: dict = Depends(get_current_user)):
+    """Describe the allowlisted tools and their approval requirements."""
     return {
         "tools": [
             {"name": "inventory_lookup", "type": "read", "requires_approval": False},
@@ -387,6 +401,7 @@ def list_tools(user: dict = Depends(get_current_user)):
 
 @router.get("/audit")
 def get_audit_log(user: dict = Depends(get_current_user)):
+    """Return audit events for the authenticated user's tenant."""
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT timestamp, event, details

@@ -1,4 +1,6 @@
 
+"""Rerank vector results with a local Sentence Transformers Cross-Encoder."""
+
 from sentence_transformers import CrossEncoder
 
 
@@ -8,6 +10,7 @@ _model = None
 
 
 def get_reranker():
+    """Load the CPU reranker lazily so import does not load the model."""
     global _model
 
     if _model is None:
@@ -25,6 +28,7 @@ def get_reranker():
 
 
 def rerank_results(query, results, top_k=5):
+    """Score retrieved query-document pairs and return the highest-ranked rows."""
     documents = results.get("documents", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
     distances = results.get("distances", [[]])[0]

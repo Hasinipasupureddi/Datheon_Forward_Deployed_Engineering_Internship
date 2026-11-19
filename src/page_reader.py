@@ -1,3 +1,5 @@
+"""Read PDF pages while retaining page numbers for citations."""
+
 import os
 import shutil
 from pathlib import Path
@@ -25,6 +27,7 @@ POPPLER_PATH = os.getenv("POPPLER_PATH") or (
 
 
 def read_pdf_pages(file_path):
+    """Return page dictionaries and use OCR when the PDF has no text layer."""
     file_path = Path(file_path)
     reader = PdfReader(file_path)
 

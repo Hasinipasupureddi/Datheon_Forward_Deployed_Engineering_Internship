@@ -1,4 +1,6 @@
 
+"""Chunk page-aware PDF text while preserving source page metadata."""
+
 try:
     from .chunker import chunk_text
 except ImportError:
@@ -6,6 +8,7 @@ except ImportError:
 
 
 def chunk_pages(pages, chunk_size=800, similarity_threshold=0.35):
+    """Return chunks with page numbers suitable for citation generation."""
     all_chunks = []
 
     for page in pages:

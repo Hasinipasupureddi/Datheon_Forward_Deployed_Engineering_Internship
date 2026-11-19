@@ -1,4 +1,6 @@
 
+"""Prepare tenant-scoped, page-aware documents for the RAG collection."""
+
 from pathlib import Path
 from datetime import date
 
@@ -18,6 +20,7 @@ def ingest_for_rag(
     department="General",
     access_tier="public"
 ):
+    """Ingest a supported file and attach tenant, access, and page metadata."""
     file_path = Path(file_path)
     extension = file_path.suffix.lower()
 

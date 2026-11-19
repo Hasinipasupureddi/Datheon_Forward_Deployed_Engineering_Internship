@@ -1,4 +1,6 @@
-﻿import time
+"""Prometheus middleware and local-LLM token usage metrics."""
+
+import time
 
 from fastapi import Request, Response
 from prometheus_client import (
@@ -28,6 +30,7 @@ REQUEST_ERRORS = Counter(
 
 
 def install_metrics(app):
+    """Install request counters, latency histograms, errors, and ``/metrics``."""
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
         if request.url.path == "/metrics":
@@ -77,6 +80,7 @@ LLM_TOKEN_COUNT = Counter(
 
 
 def record_token_usage(model, prompt_tokens, completion_tokens):
+    """Record positive prompt and completion counts reported by Ollama."""
     usage = {
         "prompt": prompt_tokens,
         "completion": completion_tokens,
